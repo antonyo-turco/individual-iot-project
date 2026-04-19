@@ -23,7 +23,7 @@ void loop() {
     unsigned long now = millis();
     if (now - lastDebounceTime > DEBOUNCE_MS) {
       lastDebounceTime = now;
-t       currentSignal = nextSignal(currentSignal);
+      currentSignal = nextSignal(currentSignal);
       Serial.print("Signal: ");
       Serial.println(SIGNAL_NAMES[currentSignal]);
     }
