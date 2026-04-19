@@ -3,6 +3,7 @@
 #include <ADCReader.h>
 #include <OLEDDisplay.h>
 #include <FFTProcessor.h>
+#include <MQTTClient.h>
 
 enum DisplayState { WAVEFORM, FFT_INFO, FFT_SPECTRUM };
 static DisplayState state = WAVEFORM;
@@ -18,6 +19,7 @@ void setup() {
   Serial.println("\n=== S3 FFT Receiver ===");
   initADC();
   initOLED();
+  initMQTT();
 }
 
 void loop() {
@@ -33,6 +35,7 @@ void loop() {
         lastDominantFreq = computeFFT();
         currentSampleRate = adaptSamplingRate(lastDominantFreq);
         getFFTMagnitudesForDisplay(fftMagnitudes, 64);
+        publishAggregate(lastDominantFreq, lastDominantFreq, currentSampleRate, FFT_SCREEN_MS);
         state = FFT_INFO;
         stateStart = millis();
       }

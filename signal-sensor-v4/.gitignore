@@ -5,3 +5,5 @@
 .vscode/ipch
 
 .github/
+
+**/include/Secrets.h

@@ -111,3 +111,15 @@ void showFFTSpectrum(float dominantFreq, float samplingFreq, const float* fftMag
 
   display.display();
 }
+
+void showConnectionStatus(const char* status) {
+  if (!displayReady) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Connecting...");
+  display.setCursor(0, 20);
+  display.println(status);
+  display.display();
+}
