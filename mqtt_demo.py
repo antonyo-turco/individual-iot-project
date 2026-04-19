@@ -17,10 +17,13 @@ import json
 import queue
 import time
 import sys
+import ssl
+import os
 import threading
 
 BROKER_IP = "192.168.1.134"
-BROKER_PORT = 1883
+BROKER_PORT = 8883
+CA_CERT = os.path.join(os.path.dirname(__file__), "mosquitto", "certs", "ca.crt")
 COMMAND_TOPIC = "iot/sensor/command"
 BENCHMARK_TOPIC = "iot/sensor/benchmark"
 AGGREGATE_TOPIC = "iot/sensor/aggregate"
@@ -306,6 +309,13 @@ def main():
     client.on_connect = on_connect
     client.on_message = on_message
     client.on_disconnect = on_disconnect
+    
+    if os.path.exists(CA_CERT):
+        client.tls_set(ca_certs=CA_CERT, tls_version=ssl.PROTOCOL_TLSv1_2)
+        client.tls_insecure_set(False)
+        print(f"TLS enabled with CA: {CA_CERT}")
+    else:
+        print(f"WARNING: CA cert not found at {CA_CERT}, connecting without TLS")
     
     try:
         print(f"Connecting to {broker_ip}:{broker_port}...")

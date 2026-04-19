@@ -1,8 +1,11 @@
 #include "MQTTCommon.h"
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <time.h>
 
-static WiFiClient wifiClient;
-PubSubClient mqttClient(wifiClient);
+static WiFiClient plainClient;
+static WiFiClientSecure secureClient;
+PubSubClient mqttClient;
 
 static const char* _ssid = nullptr;
 static const char* _password = nullptr;
@@ -33,6 +36,21 @@ static void connectWiFi() {
     Serial.println(WiFi.localIP());
     statusMsg("WiFi OK");
     delay(1000);
+
+    statusMsg("Syncing time...");
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    struct tm timeinfo;
+    int waited = 0;
+    while (!getLocalTime(&timeinfo) && waited < 10) {
+      delay(500);
+      waited++;
+    }
+    if (waited < 10) {
+      Serial.printf("[NTP] Time synced: %04d-%02d-%02d\n",
+        timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
+    } else {
+      Serial.println("[NTP] Time sync failed — TLS cert validation may fail.");
+    }
   } else {
     Serial.println("\n[WiFi] Failed to connect.");
     statusMsg("WiFi FAIL");
@@ -62,6 +80,7 @@ static void connectMQTT() {
 
 void mqttCommonInit(const char* ssid, const char* password,
                     const char* broker, int port, const char* clientId,
+                    const char* caCert,
                     StatusCallback statusCb) {
   _ssid = ssid;
   _password = password;
@@ -69,6 +88,16 @@ void mqttCommonInit(const char* ssid, const char* password,
   _statusCb = statusCb;
 
   connectWiFi();
+
+  if (caCert != nullptr) {
+    secureClient.setCACert(caCert);
+    mqttClient.setClient(secureClient);
+    Serial.println("[MQTT] TLS enabled with CA certificate.");
+  } else {
+    mqttClient.setClient(plainClient);
+    Serial.println("[MQTT] TLS disabled, using plain TCP.");
+  }
+
   mqttClient.setServer(broker, port);
   connectMQTT();
 }

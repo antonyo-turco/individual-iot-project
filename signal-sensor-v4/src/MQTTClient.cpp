@@ -106,7 +106,7 @@ static void statusDisplay(const char* msg) {
 
 void initMQTT() {
   mqttCommonInit(WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, MQTT_PORT,
-                 "heltec-v3", statusDisplay);
+                 "heltec-v3", CA_CERT, statusDisplay);
   mqttCommonSetCallback(onMessage);
   mqttCommonSubscribe(MQTT_TOPIC_CMD);
 }

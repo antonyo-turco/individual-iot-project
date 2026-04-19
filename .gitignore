@@ -1,4 +1,6 @@
 mosquitto/data/
 mosquitto/log/
+mosquitto/certs/*.crt
+mosquitto/certs/*.key
 
 .vscode/
