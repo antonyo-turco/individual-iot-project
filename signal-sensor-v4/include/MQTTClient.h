@@ -5,5 +5,7 @@
 
 void initMQTT();
 void publishAggregate(float avg, float dominantHz, float sampleRateHz, uint32_t windowMs);
+void setSampleRatePtr(float* ptr);
+void processMQTT();
 
 #endif // MQTT_CLIENT_H

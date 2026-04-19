@@ -20,10 +20,12 @@ void setup() {
   initADC();
   initOLED();
   initMQTT();
+  setSampleRatePtr(&currentSampleRate);
 }
 
 void loop() {
   bool fftReady = feedSample(currentSampleRate);
+  processMQTT();
 
   switch (state) {
     case WAVEFORM: {

@@ -123,3 +123,13 @@ void showConnectionStatus(const char* status) {
   display.println(status);
   display.display();
 }
+
+void showBriefMessage(const char* msg) {
+  if (!displayReady) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 28);
+  display.println(msg);
+  display.display();
+}

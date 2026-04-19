@@ -1,11 +1,50 @@
 #include "MQTTClient.h"
 #include "Secrets.h"
 #include "OLEDDisplay.h"
+#include "BoardConfig.h"
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h>
+
+#define MQTT_TOPIC_CMD "iot/sensor/command"
 
 static WiFiClient wifiClient;
 static PubSubClient mqttClient(wifiClient);
+static float* pCurrentSampleRate = nullptr;
+
+static void onMessage(char* topic, byte* payload, unsigned int length) {
+  char msg[length + 1];
+  memcpy(msg, payload, length);
+  msg[length] = '\0';
+
+  Serial.print("[MQTT] Command received: ");
+  Serial.println(msg);
+  showBriefMessage(msg);
+  delay(800);
+
+  StaticJsonDocument<128> doc;
+  if (deserializeJson(doc, msg) != DeserializationError::Ok) {
+    Serial.println("[MQTT] Failed to parse JSON.");
+    return;
+  }
+
+  const char* cmd = doc["cmd"];
+  if (cmd == nullptr) {
+    Serial.println("[MQTT] No 'cmd' field.");
+    return;
+  }
+
+  if (strcmp(cmd, "set_sample_rate") == 0) {
+    float rate = doc["value"];
+    if (pCurrentSampleRate != nullptr) {
+      *pCurrentSampleRate = constrain(rate, 10.0f, SAMPLE_RATE_HZ);
+      Serial.printf("[MQTT] Sample rate set to %.1f Hz\n", *pCurrentSampleRate);
+    }
+  } else if (strcmp(cmd, "reset") == 0) {
+    Serial.println("[MQTT] Restarting...");
+    ESP.restart();
+  }
+}
 
 static void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
@@ -42,6 +81,9 @@ static void connectMQTT() {
   while (!mqttClient.connected() && attempts < 5) {
     if (mqttClient.connect("heltec-v3")) {
       Serial.println(" OK.");
+      mqttClient.subscribe(MQTT_TOPIC_CMD);
+      Serial.print("[MQTT] Subscribed to ");
+      Serial.println(MQTT_TOPIC_CMD);
       showConnectionStatus("MQTT OK");
       delay(1000);
     } else {
@@ -57,6 +99,7 @@ static void connectMQTT() {
 void initMQTT() {
   connectWiFi();
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setCallback(onMessage);
   connectMQTT();
 }
 
@@ -76,5 +119,15 @@ void publishAggregate(float avg, float dominantHz, float sampleRateHz, uint32_t 
     Serial.println(payload);
   } else {
     Serial.println("[MQTT] Publish failed.");
+  }
+}
+
+void setSampleRatePtr(float* ptr) {
+  pCurrentSampleRate = ptr;
+}
+
+void processMQTT() {
+  if (mqttClient.connected()) {
+    mqttClient.loop();
   }
 }
