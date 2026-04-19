@@ -24,6 +24,7 @@ BROKER_PORT = 1883
 COMMAND_TOPIC = "iot/sensor/command"
 BENCHMARK_TOPIC = "iot/sensor/benchmark"
 AGGREGATE_TOPIC = "iot/sensor/aggregate"
+GENERATOR_TOPIC = "iot/generator/signal"
 
 client = None
 received_messages = []
@@ -39,8 +40,10 @@ def on_connect(client, userdata, flags, rc):
         print(f"✓ Connected to broker at {BROKER_IP}:{BROKER_PORT}")
         client.subscribe(BENCHMARK_TOPIC)
         client.subscribe(AGGREGATE_TOPIC)
+        client.subscribe(GENERATOR_TOPIC)
         print(f"✓ Subscribed to {BENCHMARK_TOPIC}")
         print(f"✓ Subscribed to {AGGREGATE_TOPIC}")
+        print(f"✓ Subscribed to {GENERATOR_TOPIC}")
         connected_event.set()
     else:
         print(f"✗ Connection failed with code {rc}")

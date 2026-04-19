@@ -1,0 +1,9 @@
+{
+  "name": "MQTTCommon",
+  "version": "1.0.0",
+  "description": "Shared WiFi and MQTT connection logic for IoT project",
+  "dependencies": {
+    "knolleary/PubSubClient": "^2.8",
+    "bblanchon/ArduinoJson": "^6.21.3"
+  }
+}
