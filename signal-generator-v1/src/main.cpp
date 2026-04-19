@@ -1,28 +1,47 @@
 #include <Arduino.h>
+#include "signal.h"
 
-const int LED_PIN = 2;
-const int BLINK_INTERVAL = 500; // milliseconds
+volatile bool buttonPressed = false;
+unsigned long lastDebounceTime = 0;
+SignalType currentSignal = COMPOSITE;
+
+void IRAM_ATTR onButtonPress() {
+  buttonPressed = true;
+}
 
 void setup() {
   Serial.begin(115200);
-  delay(100);
-  Serial.println("\n\n================================");
-  Serial.println("Hello World!");
-  Serial.println("LED Blink Test Starting...");
-  Serial.println("================================\n");
-  
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), onButtonPress, FALLING);
+  delay(1000);
+  Serial.print("Signal: ");
+  Serial.println(SIGNAL_NAMES[currentSignal]);
 }
 
 void loop() {
-  // Turn LED on
-  digitalWrite(LED_PIN, HIGH);
-  Serial.println("LED ON");
-  delay(BLINK_INTERVAL);
-  
-  // Turn LED off
-  digitalWrite(LED_PIN, LOW);
-  Serial.println("LED OFF");
-  delay(BLINK_INTERVAL);
+  if (buttonPressed) {
+    unsigned long now = millis();
+    if (now - lastDebounceTime > DEBOUNCE_MS) {
+      lastDebounceTime = now;
+t       currentSignal = nextSignal(currentSignal);
+      Serial.print("Signal: ");
+      Serial.println(SIGNAL_NAMES[currentSignal]);
+    }
+    buttonPressed = false;
+  }
+
+  float t = millis() / 1000.0;
+  float signal = constrain(computeSignal(currentSignal, t), 0, 255);
+
+  dacWrite(DAC_PIN, (uint8_t)signal);
+
+  int adcRaw = analogRead(ADC_PIN);
+
+  Serial.print("DAC:");
+  Serial.print((uint8_t)signal);
+  Serial.print("\t");
+  Serial.print("ADC:");
+  Serial.println(adcRaw);
+
+  delay(SAMPLE_INTERVAL);
 }
