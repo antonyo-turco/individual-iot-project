@@ -2,15 +2,50 @@
 #include "Secrets.h"
 #include "OLEDDisplay.h"
 #include "BoardConfig.h"
+#include "Benchmark.h"
+#include "FFTProcessor.h"
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
 #define MQTT_TOPIC_CMD "iot/sensor/command"
 
+enum class MqttCommand {
+  SetSampleRate,
+  SetWindowSamples,
+  Reset,
+  StartBenchmark,
+  SamplingDemo,
+  ReleaseSampleRate,
+  Unknown
+};
+
+struct CommandEntry {
+  const char* name;
+  MqttCommand cmd;
+};
+
+static constexpr CommandEntry COMMANDS[] = {
+  { "set_sample_rate",    MqttCommand::SetSampleRate    },
+  { "set_window_samples", MqttCommand::SetWindowSamples },
+  { "reset",              MqttCommand::Reset            },
+  { "start_benchmark",    MqttCommand::StartBenchmark   },
+  { "sampling_demo",      MqttCommand::SamplingDemo     },
+  { "release_sample_rate", MqttCommand::ReleaseSampleRate },
+};
+
+static MqttCommand parseCommand(const char* name) {
+  for (const auto& entry : COMMANDS) {
+    if (strcmp(name, entry.name) == 0) return entry.cmd;
+  }
+  return MqttCommand::Unknown;
+}
+
 static WiFiClient wifiClient;
-static PubSubClient mqttClient(wifiClient);
+PubSubClient mqttClient(wifiClient);
 static float* pCurrentSampleRate = nullptr;
+static float* pLastDominantFreq = nullptr;
+static bool sampleRateOverridden = false;
 
 static void onMessage(char* topic, byte* payload, unsigned int length) {
   char msg[length + 1];
@@ -28,21 +63,44 @@ static void onMessage(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  const char* cmd = doc["cmd"];
-  if (cmd == nullptr) {
+  const char* cmdStr = doc["cmd"];
+  if (cmdStr == nullptr) {
     Serial.println("[MQTT] No 'cmd' field.");
     return;
   }
 
-  if (strcmp(cmd, "set_sample_rate") == 0) {
-    float rate = doc["value"];
-    if (pCurrentSampleRate != nullptr) {
-      *pCurrentSampleRate = constrain(rate, 10.0f, SAMPLE_RATE_HZ);
-      Serial.printf("[MQTT] Sample rate set to %.1f Hz\n", *pCurrentSampleRate);
-    }
-  } else if (strcmp(cmd, "reset") == 0) {
-    Serial.println("[MQTT] Restarting...");
-    ESP.restart();
+  switch (parseCommand(cmdStr)) {
+    case MqttCommand::SetSampleRate:
+      if (pCurrentSampleRate != nullptr) {
+        *pCurrentSampleRate = constrain((float)doc["value"], 10.0f, SAMPLE_RATE_HZ);
+        sampleRateOverridden = true;
+        Serial.printf("[MQTT] Sample rate locked to %.1f Hz\n", *pCurrentSampleRate);
+      }
+      break;
+    case MqttCommand::ReleaseSampleRate:
+      sampleRateOverridden = false;
+      Serial.println("[MQTT] Sample rate released to adaptive control.");
+      break;
+    case MqttCommand::SetWindowSamples:
+      setWindowSamples((int)doc["value"]);
+      break;
+    case MqttCommand::Reset:
+      Serial.println("[MQTT] Restarting...");
+      ESP.restart();
+      break;
+    case MqttCommand::StartBenchmark:
+      Serial.println("[MQTT] Starting max sampling benchmark...");
+      runMaxSamplingBenchmark();
+      break;
+    case MqttCommand::SamplingDemo:
+      if (pCurrentSampleRate != nullptr && pLastDominantFreq != nullptr) {
+        Serial.println("[MQTT] Running sampling analysis demo...");
+        runSamplingDemo(*pLastDominantFreq, *pCurrentSampleRate);
+      }
+      break;
+    case MqttCommand::Unknown:
+      Serial.printf("[MQTT] Unknown command: %s\n", cmdStr);
+      break;
   }
 }
 
@@ -124,6 +182,14 @@ void publishAggregate(float avg, float dominantHz, float sampleRateHz, uint32_t 
 
 void setSampleRatePtr(float* ptr) {
   pCurrentSampleRate = ptr;
+}
+
+void setDominantFreqPtr(float* ptr) {
+  pLastDominantFreq = ptr;
+}
+
+bool isSampleRateOverridden() {
+  return sampleRateOverridden;
 }
 
 void processMQTT() {

@@ -8,4 +8,9 @@
 #define MQTT_PORT       1883                    // leave as is
 #define MQTT_TOPIC      "iot/sensor/aggregate"  // leave as is
 
+// NOTE: If you want to test LoRaWAN connectivity, also fill in the following with your LoRaWAN credentials. The current codebase does not implement LoRaWAN functionality, but these are included here for future expansion.
+#define LORA_APPEUI   "0000000000000000"
+#define LORA_DEVEUI   "your-deveui-here"
+#define LORA_APPKEY   "your-appkey-here"
+
 #endif // SECRETS_H

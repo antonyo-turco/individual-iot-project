@@ -133,3 +133,49 @@ void showBriefMessage(const char* msg) {
   display.println(msg);
   display.display();
 }
+
+void showMaxSamplingResult(float hz, int samples, uint32_t elapsedUs) {
+  if (!displayReady) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Max Sampling Rate");
+  display.setCursor(0, 12);
+  display.print("Hz: ");
+  display.println(hz, 1);
+  display.setCursor(0, 24);
+  display.print("Samples: ");
+  display.println(samples);
+  display.setCursor(0, 36);
+  display.print("Time: ");
+  display.print(elapsedUs / 1000);
+  display.println(" ms");
+  display.display();
+}
+
+void showSamplingAnalysis(float dominantHz, float nyquistHz, float adaptiveHz, float reductionPercent) {
+  if (!displayReady) return;
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println("Sampling Analysis");
+  display.setCursor(0, 12);
+  display.print("Dom: ");
+  display.print(dominantHz, 2);
+  display.println(" Hz");
+  display.setCursor(0, 24);
+  display.print("Nyquist: ");
+  display.print(nyquistHz, 1);
+  display.println(" Hz");
+  display.setCursor(0, 36);
+  display.print("Adapt: ");
+  display.print(adaptiveHz, 1);
+  display.println(" Hz");
+  display.setCursor(0, 48);
+  display.print("Reduce: ");
+  display.print(reductionPercent, 1);
+  display.println("%");
+  display.display();
+}

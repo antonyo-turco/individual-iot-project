@@ -21,6 +21,7 @@ void setup() {
   initOLED();
   initMQTT();
   setSampleRatePtr(&currentSampleRate);
+  setDominantFreqPtr(&lastDominantFreq);
 }
 
 void loop() {
@@ -35,7 +36,9 @@ void loop() {
 
       if (fftReady) {
         lastDominantFreq = computeFFT();
-        currentSampleRate = adaptSamplingRate(lastDominantFreq);
+        if (!isSampleRateOverridden()) {
+          currentSampleRate = adaptSamplingRate(lastDominantFreq);
+        }
         getFFTMagnitudesForDisplay(fftMagnitudes, 64);
         publishAggregate(lastDominantFreq, lastDominantFreq, currentSampleRate, FFT_SCREEN_MS);
         state = FFT_INFO;

@@ -13,6 +13,13 @@ static float circBuf[CIRC_BUF_SIZE];
 static int circHead = 0;
 static int fftIndex = 0;
 static uint32_t lastSampleTimeUs = 0;
+static int activeWindowSamples = FFT_SAMPLES;
+
+void setWindowSamples(int count) {
+  activeWindowSamples = constrain(count, 64, FFT_SAMPLES);
+  fftIndex = 0;
+  Serial.printf("[FFT] Window samples set to %d\n", activeWindowSamples);
+}
 
 bool feedSample(float sampleRateHz) {
   uint32_t intervalUs = static_cast<uint32_t>(1000000.0f / sampleRateHz);
@@ -30,12 +37,12 @@ bool feedSample(float sampleRateHz) {
   vImag[fftIndex] = 0.0;
   fftIndex++;
 
-  if (fftIndex >= FFT_SAMPLES) {
+  if (fftIndex >= activeWindowSamples) {
     fftIndex = 0;
     double mean = 0.0;
-    for (int i = 0; i < FFT_SAMPLES; i++) mean += vReal[i];
-    mean /= FFT_SAMPLES;
-    for (int i = 0; i < FFT_SAMPLES; i++) vReal[i] -= mean;
+    for (int i = 0; i < activeWindowSamples; i++) mean += vReal[i];
+    mean /= activeWindowSamples;
+    for (int i = 0; i < activeWindowSamples; i++) vReal[i] -= mean;
     return true;
   }
   return false;
