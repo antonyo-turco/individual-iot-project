@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "signal.h"
+#include "Waveform.h"
 #include "Secrets.h"
 #include <MQTTCommon.h>
 #include <ArduinoJson.h>
@@ -31,7 +31,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), onButtonPress, FALLING);
   delay(1000);
 
-  mqttCommonInit(WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, MQTT_PORT, "esp32-generator");
+  mqttCommonInit(WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, MQTT_PORT, "esp32-generator", CA_CERT);
 
   Serial.print("Signal: ");
   Serial.println(SIGNAL_NAMES[currentSignal]);
