@@ -120,6 +120,14 @@ def prompt_input(prompt_text):
     return result
 
 
+def is_help_command(choice):
+    return choice.lower() in ("h", "help")
+
+
+def is_quit_command(choice):
+    return choice.lower() in ("q", "quit")
+
+
 def on_disconnect(client, userdata, rc):
     if rc != 0:
         print(f"✗ Unexpected disconnection: {rc}")
@@ -164,6 +172,8 @@ def _print_main_menu():
     print("  1. Sensor commands")
     print("  2. Generator commands")
     print("  0. Exit")
+    print("  h/help: show options")
+    print("  q/quit: exit")
 
 
 def _print_sensor_menu():
@@ -181,20 +191,34 @@ def _print_sensor_menu():
     print("  9. Run sampling analysis demo")
     print("  10. Reset sensor device")
     print("  0. Back")
+    print("  h/help: show options")
+    print("  q/quit: exit")
 
 
 def _print_generator_menu():
     print("\n" + "-"*60)
     print("  Generator Commands")
     print("-"*60)
-    print("  1. Start signal output")
-    print("  2. Stop signal output")
-    print("  3. Set waveform: Sine")
-    print("  4. Set waveform: Square")
-    print("  5. Set waveform: Triangle")
-    print("  6. Set waveform: Sawtooth")
-    print("  7. Set waveform: Composite")
+    print("  Signal Control:")
+    print("    1. Start signal output")
+    print("    2. Stop signal output")
+    print("  Signal Types:")
+    print("    3. Set waveform: Sine")
+    print("    4. Set waveform: Square")
+    print("    5. Set waveform: Triangle")
+    print("    6. Set waveform: Sawtooth")
+    print("    7. Set waveform: Composite")
+    print("    8. Set waveform: Custom (user-defined)")
+    print("    9. Set waveform: Flat (DC)")
+    print("  Noise Control:")
+    print("    10. Enable noise")
+    print("    11. Disable noise")
+    print("    12. Configure noise parameters")
+    print("  Custom Signal:")
+    print("    13. Define custom signal (sum of sinusoids)")
     print("  0. Back")
+    print("  h/help: show options")
+    print("  q/quit: exit")
 
 
 def _sensor_menu():
@@ -202,6 +226,11 @@ def _sensor_menu():
     while True:
         try:
             choice = prompt_input("\nSensor > ").strip()
+            if is_help_command(choice):
+                _print_sensor_menu()
+                continue
+            if is_quit_command(choice):
+                return True
             if choice == "1":
                 send_command("Lock sample rate to 50 Hz", {"cmd": "set_sample_rate", "value": 50.0})
             elif choice == "2":
@@ -232,20 +261,85 @@ def _sensor_menu():
                 else:
                     print("  Cancelled.")
             elif choice == "0":
-                return
+                return False
             else:
                 print("  Invalid choice.")
                 continue
             time.sleep(1)
         except KeyboardInterrupt:
-            return
+            return True
 
+def _configure_noise_params():
+    """Interactive noise parameter configuration."""
+    print("\n" + "-"*60)
+    print("  Configure Noise Parameters")
+    print("-"*60)
+    print("  Gaussian noise σ (sigma): baseline sensor noise")
+    print("  Spike probability (0–1): chance of anomaly per sample")
+    print("  Spike magnitude: uniform random range [min, max]")
+    print("  Leave blank to keep current value")
+    print("-"*60)
+    
+    try:
+        sigma_str = prompt_input("  Gaussian noise σ (default 0.2): ").strip()
+        spike_prob_str = prompt_input("  Spike probability (default 0.02): ").strip()
+        spike_min_str = prompt_input("  Spike magnitude min (default 5.0): ").strip()
+        spike_max_str = prompt_input("  Spike magnitude max (default 15.0): ").strip()
+        
+        cmd = {"cmd": "set_noise_params"}
+        if sigma_str:
+            cmd["sigma"] = float(sigma_str)
+        if spike_prob_str:
+            cmd["spike_prob"] = float(spike_prob_str)
+        if spike_min_str:
+            cmd["spike_min"] = float(spike_min_str)
+        if spike_max_str:
+            cmd["spike_max"] = float(spike_max_str)
+        
+        send_generator_command("Set noise parameters", cmd)
+    except ValueError:
+        print("  ✗ Invalid input. Please enter numeric values.")
+
+
+def _define_custom_signal():
+    """Interactive custom signal harmonics definition."""
+    print("\n" + "-"*60)
+    print("  Define Custom Signal: SUM(a_k * sin(2π * f_k * t))")
+    print("-"*60)
+    print("  Enter harmonics as pairs of (amplitude, frequency)")
+    print("  Maximum 8 harmonics.")
+    print("  Leave amplitude blank to finish.")
+    print("-"*60)
+    
+    harmonics = []
+    try:
+        for i in range(8):
+            amp_str = prompt_input(f"  Harmonic {i+1} amplitude (or blank to finish): ").strip()
+            if not amp_str:
+                break
+            amp = float(amp_str)
+            freq_str = prompt_input(f"  Harmonic {i+1} frequency (Hz): ").strip()
+            freq = float(freq_str)
+            harmonics.append({"a": amp, "f": freq})
+        
+        if harmonics:
+            cmd = {"cmd": "set_custom_signal", "harmonics": harmonics}
+            send_generator_command(f"Set custom signal ({len(harmonics)} harmonics)", cmd)
+        else:
+            print("  No harmonics entered.")
+    except ValueError:
+        print("  ✗ Invalid input. Please enter numeric values.")
 
 def _generator_menu():
     _print_generator_menu()
     while True:
         try:
             choice = prompt_input("\nGenerator > ").strip()
+            if is_help_command(choice):
+                _print_generator_menu()
+                continue
+            if is_quit_command(choice):
+                return True
             if choice == "1":
                 send_generator_command("Start signal generator", {"cmd": "start"})
             elif choice == "2":
@@ -260,14 +354,26 @@ def _generator_menu():
                 send_generator_command("Set waveform: Sawtooth", {"cmd": "set_signal", "value": "Sawtooth"})
             elif choice == "7":
                 send_generator_command("Set waveform: Composite", {"cmd": "set_signal", "value": "Composite"})
+            elif choice == "8":
+                send_generator_command("Set waveform: Custom", {"cmd": "set_signal", "value": "Custom"})
+            elif choice == "9":
+                send_generator_command("Set waveform: Flat", {"cmd": "set_signal", "value": "Flat"})
+            elif choice == "10":
+                send_generator_command("Enable noise", {"cmd": "set_noise", "enabled": True})
+            elif choice == "11":
+                send_generator_command("Disable noise", {"cmd": "set_noise", "enabled": False})
+            elif choice == "12":
+                _configure_noise_params()
+            elif choice == "13":
+                _define_custom_signal()
             elif choice == "0":
-                return
+                return False
             else:
                 print("  Invalid choice.")
                 continue
             time.sleep(1)
         except KeyboardInterrupt:
-            return
+            return True
 
 
 def demo_interactive():
@@ -276,11 +382,18 @@ def demo_interactive():
     while True:
         try:
             choice = prompt_input("\nMain > ").strip()
+            if is_help_command(choice):
+                _print_main_menu()
+                continue
+            if is_quit_command(choice):
+                break
             if choice == "1":
-                _sensor_menu()
+                if _sensor_menu():
+                    break
                 _print_main_menu()
             elif choice == "2":
-                _generator_menu()
+                if _generator_menu():
+                    break
                 _print_main_menu()
             elif choice == "0":
                 break

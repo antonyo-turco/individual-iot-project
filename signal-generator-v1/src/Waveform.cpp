@@ -2,6 +2,9 @@
 #include "Waveform.h"
 #include <cmath>
 
+CustomHarmonic customHarmonics[MAX_HARMONICS];
+int customHarmonicCount = 0;
+
 SignalType nextSignal(SignalType current) {
   return static_cast<SignalType>((current + 1) % SIGNAL_COUNT);
 }
@@ -29,6 +32,17 @@ float computeSignal(SignalType type, float t) {
 
     case SAWTOOTH:
       return OFFSET + AMPLITUDE * (2.0f * phase - 1.0f);
+
+    case CUSTOM: {
+      float s = 0.0f;
+      for (int i = 0; i < customHarmonicCount; i++) {
+        s += customHarmonics[i].amplitude * sin(2.0f * PI * customHarmonics[i].frequency * t);
+      }
+      return OFFSET + SCALE_FACTOR * s;
+    }
+
+    case FLAT:
+      return OFFSET;
 
     default:
       return OFFSET;
