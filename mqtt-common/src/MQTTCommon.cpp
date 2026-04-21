@@ -24,6 +24,12 @@ static void connectWiFi() {
   Serial.println(_ssid);
   WiFi.begin(_ssid, _password);
 
+  int n = WiFi.scanNetworks();
+  Serial.printf("[WiFi] Found %d networks:\n", n);
+  for (int i = 0; i < n; i++) {
+    Serial.printf("[WiFi]   '%s' (%d dBm)\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i));
+  }
+
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 20) {
     delay(500);
@@ -41,18 +47,21 @@ static void connectWiFi() {
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
     struct tm timeinfo;
     int waited = 0;
-    while (!getLocalTime(&timeinfo) && waited < 10) {
+    while (!getLocalTime(&timeinfo) && waited < 20) {
       delay(500);
       waited++;
     }
-    if (waited < 10) {
+    if (waited < 20) {
       Serial.printf("[NTP] Time synced: %04d-%02d-%02d\n",
         timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
     } else {
-      Serial.println("[NTP] Time sync failed — TLS cert validation may fail.");
+      Serial.println("[NTP] Time sync failed — TLS cert validation will fail. Check NTP access.");
     }
   } else {
     Serial.println("\n[WiFi] Failed to connect.");
+    Serial.printf("[WiFi] Status: %d (0=idle, 1=no SSID found, 3=connected, 4=connect failed, 6=disconnected)\n", WiFi.status());
+    Serial.printf("[WiFi] SSID: %s\n", WiFi.SSID().c_str());
+    Serial.printf("[WiFi] IP: %s\n", WiFi.localIP().toString().c_str());
     statusMsg("WiFi FAIL");
   }
 }
@@ -91,6 +100,9 @@ void mqttCommonInit(const char* ssid, const char* password,
 
   if (caCert != nullptr) {
     secureClient.setCACert(caCert);
+    secureClient.setInsecure();
+    Serial.printf("[TLS] CA cert starts with: %.100s\n", caCert);
+    Serial.printf("[TLS] CA cert length: %d\n", strlen(caCert));
     mqttClient.setClient(secureClient);
     Serial.println("[MQTT] TLS enabled with CA certificate.");
   } else {

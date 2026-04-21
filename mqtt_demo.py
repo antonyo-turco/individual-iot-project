@@ -28,6 +28,7 @@ COMMAND_TOPIC = "iot/sensor/command"
 BENCHMARK_TOPIC = "iot/sensor/benchmark"
 AGGREGATE_TOPIC = "iot/sensor/aggregate"
 GENERATOR_TOPIC = "iot/generator/signal"
+GENERATOR_CMD_TOPIC = "iot/generator/command"
 
 client = None
 received_messages = []
@@ -125,93 +126,166 @@ def on_disconnect(client, userdata, rc):
 
 
 def send_command(cmd_name, cmd_dict):
-    """Send a command via MQTT."""
+    """Send a command to the sensor via MQTT."""
     global client
     payload = json.dumps(cmd_dict)
     print(f"\n→ Sending: {cmd_name}")
     print(f"  Payload: {payload}")
-    
+
     info = client.publish(COMMAND_TOPIC, payload)
     if info.rc == mqtt.MQTT_ERR_SUCCESS:
         print(f"  ✓ Published successfully")
     else:
         print(f"  ✗ Publish failed: {info.rc}")
-    
+
     time.sleep(0.5)
 
 
-def demo_interactive():
-    """Interactive demo mode."""
+def send_generator_command(cmd_name, cmd_dict):
+    """Send a command to the signal generator via MQTT."""
     global client
-    
+    payload = json.dumps(cmd_dict)
+    print(f"\n→ Sending to generator: {cmd_name}")
+    print(f"  Payload: {payload}")
+
+    info = client.publish(GENERATOR_CMD_TOPIC, payload)
+    if info.rc == mqtt.MQTT_ERR_SUCCESS:
+        print(f"  ✓ Published successfully")
+    else:
+        print(f"  ✗ Publish failed: {info.rc}")
+
+    time.sleep(0.5)
+
+
+def _print_main_menu():
     print("\n" + "="*60)
-    print("ESP32 Signal Sensor - Interactive MQTT Control Demo")
+    print("  Interactive MQTT Control")
     print("="*60)
-    print("\nAvailable commands:")
+    print("  1. Sensor commands")
+    print("  2. Generator commands")
+    print("  0. Exit")
+
+
+def _print_sensor_menu():
+    print("\n" + "-"*60)
+    print("  Sensor Commands")
+    print("-"*60)
     print("  1. Lock sample rate to 50 Hz")
     print("  2. Lock sample rate to 100 Hz")
     print("  3. Lock sample rate to 10 Hz")
     print("  4. Release sample rate (adaptive mode)")
-    print("  5. Set FFT window size (64 samples - max resolution)")
-    print("  6. Set FFT window size (128 samples - balanced)")
-    print("  7. Set FFT window size (256 samples - min latency)")
+    print("  5. Set FFT window — 64 samples  (max resolution)")
+    print("  6. Set FFT window — 128 samples (balanced)")
+    print("  7. Set FFT window — 256 samples (min latency)")
     print("  8. Run max sampling benchmark")
     print("  9. Run sampling analysis demo")
-    print("  10. Reset device")
-    print("  11. Exit")
-    
+    print("  10. Reset sensor device")
+    print("  0. Back")
+
+
+def _print_generator_menu():
+    print("\n" + "-"*60)
+    print("  Generator Commands")
+    print("-"*60)
+    print("  1. Start signal output")
+    print("  2. Stop signal output")
+    print("  3. Set waveform: Sine")
+    print("  4. Set waveform: Square")
+    print("  5. Set waveform: Triangle")
+    print("  6. Set waveform: Sawtooth")
+    print("  7. Set waveform: Composite")
+    print("  0. Back")
+
+
+def _sensor_menu():
+    _print_sensor_menu()
     while True:
         try:
-            choice = prompt_input("\nSelect command (1-11): ").strip()
-            
+            choice = prompt_input("\nSensor > ").strip()
             if choice == "1":
-                send_command("Lock sample rate to 50 Hz", 
-                           {"cmd": "set_sample_rate", "value": 50.0})
-                time.sleep(1)
+                send_command("Lock sample rate to 50 Hz", {"cmd": "set_sample_rate", "value": 50.0})
             elif choice == "2":
-                send_command("Lock sample rate to 100 Hz", 
-                           {"cmd": "set_sample_rate", "value": 100.0})
-                time.sleep(1)
+                send_command("Lock sample rate to 100 Hz", {"cmd": "set_sample_rate", "value": 100.0})
             elif choice == "3":
-                send_command("Lock sample rate to 10 Hz", 
-                           {"cmd": "set_sample_rate", "value": 10.0})
-                time.sleep(1)
+                send_command("Lock sample rate to 10 Hz", {"cmd": "set_sample_rate", "value": 10.0})
             elif choice == "4":
-                send_command("Release sample rate (back to adaptive)", 
-                           {"cmd": "release_sample_rate"})
-                time.sleep(1)
+                send_command("Release sample rate (back to adaptive)", {"cmd": "release_sample_rate"})
             elif choice == "5":
-                send_command("Set FFT window to 64 samples (max resolution)", 
-                           {"cmd": "set_fft_window", "value": 64})
-                time.sleep(1)
+                send_command("Set FFT window to 64 samples", {"cmd": "set_fft_window", "value": 64})
             elif choice == "6":
-                send_command("Set FFT window to 128 samples (balanced)", 
-                           {"cmd": "set_fft_window", "value": 128})
-                time.sleep(1)
+                send_command("Set FFT window to 128 samples", {"cmd": "set_fft_window", "value": 128})
             elif choice == "7":
-                send_command("Set FFT window to 256 samples (min latency)", 
-                           {"cmd": "set_fft_window", "value": 256})
-                time.sleep(1)
+                send_command("Set FFT window to 256 samples", {"cmd": "set_fft_window", "value": 256})
             elif choice == "8":
-                send_command("Start max sampling benchmark", 
-                           {"cmd": "start_benchmark"})
+                send_command("Start max sampling benchmark", {"cmd": "start_benchmark"})
                 time.sleep(3)
+                continue
             elif choice == "9":
-                send_command("Start sampling analysis demo", 
-                           {"cmd": "sampling_demo"})
+                send_command("Start sampling analysis demo", {"cmd": "sampling_demo"})
                 time.sleep(3)
+                continue
             elif choice == "10":
-                confirm = prompt_input("Are you sure? This will restart the device (y/n): ").strip()
+                confirm = prompt_input("  Restart sensor? (y/n): ").strip()
                 if confirm.lower() == "y":
-                    send_command("Reset device", {"cmd": "reset"})
+                    send_command("Reset sensor", {"cmd": "reset"})
                     time.sleep(5)
-                    break
                 else:
                     print("  Cancelled.")
-            elif choice == "11":
+            elif choice == "0":
+                return
+            else:
+                print("  Invalid choice.")
+                continue
+            time.sleep(1)
+        except KeyboardInterrupt:
+            return
+
+
+def _generator_menu():
+    _print_generator_menu()
+    while True:
+        try:
+            choice = prompt_input("\nGenerator > ").strip()
+            if choice == "1":
+                send_generator_command("Start signal generator", {"cmd": "start"})
+            elif choice == "2":
+                send_generator_command("Stop signal generator", {"cmd": "stop"})
+            elif choice == "3":
+                send_generator_command("Set waveform: Sine", {"cmd": "set_signal", "value": "Sine"})
+            elif choice == "4":
+                send_generator_command("Set waveform: Square", {"cmd": "set_signal", "value": "Square"})
+            elif choice == "5":
+                send_generator_command("Set waveform: Triangle", {"cmd": "set_signal", "value": "Triangle"})
+            elif choice == "6":
+                send_generator_command("Set waveform: Sawtooth", {"cmd": "set_signal", "value": "Sawtooth"})
+            elif choice == "7":
+                send_generator_command("Set waveform: Composite", {"cmd": "set_signal", "value": "Composite"})
+            elif choice == "0":
+                return
+            else:
+                print("  Invalid choice.")
+                continue
+            time.sleep(1)
+        except KeyboardInterrupt:
+            return
+
+
+def demo_interactive():
+    """Interactive demo mode."""
+    _print_main_menu()
+    while True:
+        try:
+            choice = prompt_input("\nMain > ").strip()
+            if choice == "1":
+                _sensor_menu()
+                _print_main_menu()
+            elif choice == "2":
+                _generator_menu()
+                _print_main_menu()
+            elif choice == "0":
                 break
             else:
-                print("  Invalid choice, try again.")
+                print("  Invalid choice.")
         except KeyboardInterrupt:
             print("\n\nExiting...")
             break
