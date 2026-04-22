@@ -2,7 +2,9 @@
 #define MQTT_CLIENT_H
 
 #include <Arduino.h>
-#include <MQTTCommon.h>
+#include <PubSubClient.h>
+
+extern PubSubClient mqttClient;
 
 void initMQTT();
 void publishAggregate(float avg, float dominantHz, float sampleRateHz, uint32_t windowMs);

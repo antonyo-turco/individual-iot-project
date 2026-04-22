@@ -23,6 +23,10 @@ static bool buttonPressed() {
   return pressed;
 }
 
+void taskFFT(void* pvParameters);
+void taskMQTT(void* pvParameters);
+
+
 void setup() {
   Serial.begin(115200);
   delay(1500);
@@ -36,53 +40,67 @@ void setup() {
   initLoRa();
   setSampleRatePtr(&currentSampleRate);
   setDominantFreqPtr(&lastDominantFreq);
+  xTaskCreatePinnedToCore(taskFFT,      "FFT",       10000, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(taskMQTT,     "MQTT-WiFi", 10000, NULL, 1, NULL, 0);
+}
+
+void taskMQTT(void* pvParameters) {
+  while (1) {
+    processMQTT();
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+}
+
+void taskFFT(void* pvParameters) {
+  while (1) {
+    bool fftReady = feedSample(currentSampleRate);
+    bool btn = buttonPressed();
+
+    switch (state) {
+      case WAVEFORM: {
+        float waveform[128];
+        float wMin, wMax;
+        getRealtimeWaveform(waveform, 128);
+        getWaveformRange(&wMin, &wMax);
+        showWaveform(waveform, 128, wMin, wMax);
+
+        if (fftReady) {
+          digitalWrite(LED_PIN, HIGH);
+          ledOffAt = millis() + 500;
+          lastDominantFreq = computeFFT();
+          if (!isSampleRateOverridden()) {
+            currentSampleRate = adaptSamplingRate(lastDominantFreq);
+          }
+          getFFTMagnitudesForDisplay(fftMagnitudes, 64);
+          publishAggregate(getLastAvgMv(), lastDominantFreq, currentSampleRate, FFT_SCREEN_MS);
+          processLoRa(getLastAvgMv(), lastDominantFreq, currentSampleRate);
+        }
+        if (btn) {
+          state = FFT_INFO;
+        }
+        break;
+      }
+      case FFT_INFO:
+        showFFTInfo(lastDominantFreq, currentSampleRate);
+        if (btn) {
+          state = FFT_SPECTRUM;
+        }
+        break;
+      case FFT_SPECTRUM:
+        showFFTSpectrum(lastDominantFreq, currentSampleRate, fftMagnitudes, 64);
+        if (btn) {
+          state = WAVEFORM;
+        }
+        break;
+    }
+
+    if (ledOffAt > 0 && millis() >= ledOffAt) {
+      digitalWrite(LED_PIN, LOW);
+      ledOffAt = 0;
+    }
+  }
 }
 
 void loop() {
-  bool fftReady = feedSample(currentSampleRate);
-  processMQTT();
-  bool btn = buttonPressed();
-
-  switch (state) {
-    case WAVEFORM: {
-      float waveform[128];
-      float wMin, wMax;
-      getRealtimeWaveform(waveform, 128);
-      getWaveformRange(&wMin, &wMax);
-      showWaveform(waveform, 128, wMin, wMax);
-
-      if (fftReady) {
-        digitalWrite(LED_PIN, HIGH);
-        ledOffAt = millis() + 500;
-        lastDominantFreq = computeFFT();
-        if (!isSampleRateOverridden()) {
-          currentSampleRate = adaptSamplingRate(lastDominantFreq);
-        }
-        getFFTMagnitudesForDisplay(fftMagnitudes, 64);
-        publishAggregate(getLastAvgMv(), lastDominantFreq, currentSampleRate, FFT_SCREEN_MS);
-        processLoRa(getLastAvgMv(), lastDominantFreq, currentSampleRate);
-      }
-      if (btn) {
-        state = FFT_INFO;
-      }
-      break;
-    }
-    case FFT_INFO:
-      showFFTInfo(lastDominantFreq, currentSampleRate);
-      if (btn) {
-        state = FFT_SPECTRUM;
-      }
-      break;
-    case FFT_SPECTRUM:
-      showFFTSpectrum(lastDominantFreq, currentSampleRate, fftMagnitudes, 64);
-      if (btn) {
-        state = WAVEFORM;
-      }
-      break;
-  }
-
-  if (ledOffAt > 0 && millis() >= ledOffAt) {
-    digitalWrite(LED_PIN, LOW);
-    ledOffAt = 0;
-  }
+  vTaskDelete(NULL);
 }
