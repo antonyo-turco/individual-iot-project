@@ -4,6 +4,7 @@
 #include <OLEDDisplay.h>
 #include <FFTProcessor.h>
 #include <MQTTClient.h>
+#include <LoRaHandler.h>
 
 enum DisplayState { WAVEFORM, FFT_INFO, FFT_SPECTRUM };
 static DisplayState state = WAVEFORM;
@@ -32,6 +33,7 @@ void setup() {
   initADC();
   initOLED();
   initMQTT();
+  initLoRa();
   setSampleRatePtr(&currentSampleRate);
   setDominantFreqPtr(&lastDominantFreq);
 }
@@ -58,6 +60,7 @@ void loop() {
         }
         getFFTMagnitudesForDisplay(fftMagnitudes, 64);
         publishAggregate(getLastAvgMv(), lastDominantFreq, currentSampleRate, FFT_SCREEN_MS);
+        processLoRa(getLastAvgMv(), lastDominantFreq, currentSampleRate);
       }
       if (btn) {
         state = FFT_INFO;
