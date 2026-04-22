@@ -2,6 +2,7 @@
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <time.h>
 
 #include "MQTTClient.h"
 #include "Secrets.h"
@@ -128,8 +129,26 @@ void initMQTT() {
     while (WiFi.status() != WL_CONNECTED) { delay(500); }
     Serial.printf("\n[WiFi] Connected, IP: %s\n", WiFi.localIP().toString().c_str());
   }
+
+  // Sync time via NTP — required for TLS certificate validation
+  showConnectionStatus("Syncing time...");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  struct tm timeinfo;
+  int waited = 0;
+  while (!getLocalTime(&timeinfo) && waited < 20) {
+    delay(500);
+    waited++;
+  }
+  if (waited < 20) {
+    Serial.printf("[NTP] Time synced: %04d-%02d-%02d\n",
+      timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
+  } else {
+    Serial.println("[NTP] Time sync failed");
+  }
   net.setCACert(CA_CERT);
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  // do not check validity of the broker certificate, since it uses a self-signed cert with a common name that doesn't match the broker address
+  net.setInsecure();
   mqttClient.setCallback(callback);
   mqttClient.setBufferSize(256);
 }
