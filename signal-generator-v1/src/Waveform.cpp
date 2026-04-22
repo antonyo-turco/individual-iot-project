@@ -12,18 +12,18 @@ SignalType nextSignal(SignalType current) {
   return static_cast<SignalType>((current + 1) % SIGNAL_COUNT);
 }
 
-float computeSignal(SignalType type, float t) {
-  float phase = t * FREQ;
+float computeSignal(SignalType type, float t, float freqMult) {
+  float phase = t * FREQ * freqMult;
   phase -= floor(phase);
 
   switch (type) {
     case COMPOSITE:
       return OFFSET
-           + AMP_1 * sin(2.0 * PI * FREQ_1 * t)
-           + AMP_2 * sin(2.0 * PI * FREQ_2 * t);
+           + AMP_1 * sin(2.0 * PI * FREQ_1 * freqMult * t)
+           + AMP_2 * sin(2.0 * PI * FREQ_2 * freqMult * t);
 
     case SINE:
-      return OFFSET + AMPLITUDE * sin(2.0 * PI * FREQ * t);
+      return OFFSET + AMPLITUDE * sin(2.0 * PI * FREQ * freqMult * t);
 
     case SQUARE:
       return OFFSET + (phase < 0.5f ? AMPLITUDE : -AMPLITUDE);
@@ -39,7 +39,7 @@ float computeSignal(SignalType type, float t) {
     case CUSTOM: {
       float s = 0.0f;
       for (int i = 0; i < customHarmonicCount; i++) {
-        s += customHarmonics[i].amplitude * sin(2.0f * PI * customHarmonics[i].frequency * t);
+        s += customHarmonics[i].amplitude * sin(2.0f * PI * customHarmonics[i].frequency * freqMult * t);
       }
       return OFFSET + SCALE_FACTOR * s;
     }

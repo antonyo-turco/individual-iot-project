@@ -216,6 +216,13 @@ def _print_generator_menu():
     print("    12. Configure noise parameters")
     print("  Custom Signal:")
     print("    13. Define custom signal (sum of sinusoids)")
+    print("  Frequency Multiplier:")
+    print("    14. Set multiplier: 0.5x (half speed)")
+    print("    15. Set multiplier: 2x")
+    print("    16. Set multiplier: 5x")
+    print("    17. Set multiplier: 10x")
+    print("    18. Reset multiplier to 1x")
+    print("    19. Set custom multiplier")
     print("  0. Back")
     print("  h/help: show options")
     print("  q/quit: exit")
@@ -301,6 +308,22 @@ def _configure_noise_params():
         print("  ✗ Invalid input. Please enter numeric values.")
 
 
+def _set_custom_freq_multiplier():
+    print("\n" + "-"*60)
+    print("  Set Custom Frequency Multiplier")
+    print("-"*60)
+    print("  Examples: 0.5 (half), 1.0 (reset), 2.0 (double), 10.0 (10x)")
+    try:
+        val_str = prompt_input("  Multiplier (> 0): ").strip()
+        val = float(val_str)
+        if val <= 0:
+            print("  ✗ Multiplier must be greater than 0.")
+            return
+        send_generator_command(f"Set frequency multiplier to {val}x", {"cmd": "set_freq", "multiplier": val})
+    except ValueError:
+        print("  ✗ Invalid input. Please enter a numeric value.")
+
+
 def _define_custom_signal():
     """Interactive custom signal harmonics definition."""
     print("\n" + "-"*60)
@@ -366,6 +389,18 @@ def _generator_menu():
                 _configure_noise_params()
             elif choice == "13":
                 _define_custom_signal()
+            elif choice == "14":
+                send_generator_command("Set frequency multiplier to 0.5x", {"cmd": "set_freq", "multiplier": 0.5})
+            elif choice == "15":
+                send_generator_command("Set frequency multiplier to 2x", {"cmd": "set_freq", "multiplier": 2.0})
+            elif choice == "16":
+                send_generator_command("Set frequency multiplier to 5x", {"cmd": "set_freq", "multiplier": 5.0})
+            elif choice == "17":
+                send_generator_command("Set frequency multiplier to 10x", {"cmd": "set_freq", "multiplier": 10.0})
+            elif choice == "18":
+                send_generator_command("Reset frequency multiplier to 1x", {"cmd": "set_freq", "multiplier": 1.0})
+            elif choice == "19":
+                _set_custom_freq_multiplier()
             elif choice == "0":
                 return False
             else:

@@ -12,6 +12,7 @@
 static SignalType currentSignal = COMPOSITE;
 static bool signalRunning = true;
 static bool noiseEnabled = false;
+static float freqMultiplier = 1.0f;
 static NoiseParams noiseParams;
 
 static float gaussianNoise(float sigma) {
@@ -97,8 +98,18 @@ NoiseParams SignalManagerGetNoiseParams() {
   return noiseParams;
 }
 
+void SignalManagerSetFreqMultiplier(float mult) {
+  freqMultiplier = mult;
+  Serial.printf("[SignalManager] Freq multiplier set to %.2fx\n", mult);
+  SignalManagerPublishState();
+}
+
+float SignalManagerGetFreqMultiplier() {
+  return freqMultiplier;
+}
+
 float SignalManagerComputeSignal(float t) {
-  float signal = computeSignal(currentSignal, t);
+  float signal = computeSignal(currentSignal, t, freqMultiplier);
 
   if (noiseEnabled) {
     signal += gaussianNoise(noiseParams.sigma) * SCALE_FACTOR;
@@ -119,6 +130,7 @@ void SignalManagerPublishState() {
     StaticJsonDocument<512> doc;
     doc["signal"] = SIGNAL_NAMES[currentSignal];
     doc["running"] = signalRunning;
+    doc["freq_mult"] = freqMultiplier;
     doc["timestamp"] = millis();
     if (noiseEnabled) {
       doc["noise_enabled"] = true;
@@ -139,9 +151,10 @@ void SignalManagerPublishState() {
   } else {
     char payload[256];
     snprintf(payload, sizeof(payload),
-      "{\"signal\":\"%s\",\"freq\":%.1f,\"running\":%s",
+      "{\"signal\":\"%s\",\"freq\":%.1f,\"freq_mult\":%.2f,\"running\":%s",
       SIGNAL_NAMES[currentSignal],
       (currentSignal == COMPOSITE) ? FREQ_1 : FREQ,
+      freqMultiplier,
       signalRunning ? "true" : "false"
     );
 

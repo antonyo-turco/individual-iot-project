@@ -8,6 +8,7 @@ static constexpr const char* SIGNAL_NAMES[] = { "Composite", "Sine", "Square", "
 static constexpr int DAC_PIN = 25;
 static constexpr int ADC_PIN = 34;
 static constexpr int BUTTON_PIN = 0;
+static constexpr int LED_PIN = 2;
 
 static constexpr float FREQ = 5.0;
 static constexpr float FREQ_1 = 3.0;
@@ -33,6 +34,6 @@ extern CustomHarmonic customHarmonics[MAX_HARMONICS];
 extern int customHarmonicCount;
 
 SignalType nextSignal(SignalType current);
-float computeSignal(SignalType type, float t);
+float computeSignal(SignalType type, float t, float freqMult = 1.0f);
 
 #endif

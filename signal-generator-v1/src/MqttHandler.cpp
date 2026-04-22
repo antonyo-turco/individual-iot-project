@@ -7,6 +7,23 @@
 
 #define MQTT_TOPIC_CMD "iot/generator/command"
 
+void blinkLed(int times) {
+  for (int i = 0; i < times; i++) {
+    digitalWrite(LED_PIN, HIGH);
+    delay(150);
+    digitalWrite(LED_PIN, LOW);
+    delay(150);
+  }
+}
+
+static void onStatus(const char* msg) {
+  if (strcmp(msg, "WiFi OK") == 0) {
+    blinkLed(2);
+  } else if (strcmp(msg, "MQTT OK") == 0) {
+    blinkLed(3);
+  }
+}
+
 void MqttHandleMessage(char* topic, byte* payload, unsigned int length) {
   char msg[length + 1];
   memcpy(msg, payload, length);
@@ -63,13 +80,20 @@ void MqttHandleMessage(char* topic, byte* payload, unsigned int length) {
       count++;
     }
     SignalManagerSetCustomSignal(customHarmonics_tmp, count);
+  } else if (strcmp(cmd, "set_freq") == 0) {
+    float mult = doc["multiplier"] | SignalManagerGetFreqMultiplier();
+    if (mult > 0.0f) {
+      SignalManagerSetFreqMultiplier(mult);
+    } else {
+      Serial.println("[MqttHandler] set_freq: multiplier must be > 0.");
+    }
   } else {
     Serial.printf("[MqttHandler] Unknown command: %s\n", cmd);
   }
 }
 
 void MqttInit() {
-  mqttCommonInit(WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, MQTT_PORT, "esp32-generator", CA_CERT);
+  mqttCommonInit(WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, MQTT_PORT, "esp32-generator", CA_CERT, onStatus);
   mqttCommonSetCallback(MqttHandleMessage);
   mqttCommonSubscribe(MQTT_TOPIC_CMD);
   Serial.println("[MqttHandler] Initialized");

@@ -6,7 +6,10 @@
 
 void setup() {
   Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
   delay(1000);
+
+  blinkLed(1);
 
   ButtonHandlerInit();
   SignalManagerInit();

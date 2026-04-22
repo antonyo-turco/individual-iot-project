@@ -16,6 +16,9 @@ void SignalManagerStartSignal();
 void SignalManagerStopSignal();
 void SignalManagerPublishState();
 
+void SignalManagerSetFreqMultiplier(float mult);
+float SignalManagerGetFreqMultiplier();
+
 void SignalManagerSetNoiseEnabled(bool enabled);
 void SignalManagerSetNoiseParams(float sigma, float spikeProb, float spikeMin, float spikeMax);
 
