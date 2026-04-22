@@ -2,8 +2,11 @@
 #include "Waveform.h"
 #include <cmath>
 
-CustomHarmonic customHarmonics[MAX_HARMONICS];
-int customHarmonicCount = 0;
+CustomHarmonic customHarmonics[MAX_HARMONICS] = {
+  {AMP_1 / SCALE_FACTOR, FREQ_1},
+  {AMP_2 / SCALE_FACTOR, FREQ_2}
+};
+int customHarmonicCount = 2;
 
 SignalType nextSignal(SignalType current) {
   return static_cast<SignalType>((current + 1) % SIGNAL_COUNT);

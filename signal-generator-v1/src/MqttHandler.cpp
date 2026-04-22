@@ -7,7 +7,7 @@
 
 #define MQTT_TOPIC_CMD "iot/generator/command"
 
-static void onMessage(char* topic, byte* payload, unsigned int length) {
+void MqttHandleMessage(char* topic, byte* payload, unsigned int length) {
   char msg[length + 1];
   memcpy(msg, payload, length);
   msg[length] = '\0';
@@ -70,7 +70,7 @@ static void onMessage(char* topic, byte* payload, unsigned int length) {
 
 void MqttInit() {
   mqttCommonInit(WIFI_SSID, WIFI_PASSWORD, MQTT_BROKER, MQTT_PORT, "esp32-generator", CA_CERT);
-  mqttCommonSetCallback(onMessage);
+  mqttCommonSetCallback(MqttHandleMessage);
   mqttCommonSubscribe(MQTT_TOPIC_CMD);
   Serial.println("[MqttHandler] Initialized");
 }
