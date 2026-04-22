@@ -14,6 +14,7 @@ static int circHead = 0;
 static int fftIndex = 0;
 static uint32_t lastSampleTimeUs = 0;
 static int activeWindowSamples = FFT_SAMPLES;
+static float lastAvgMv = 0.0f;
 
 void setWindowSamples(int count) {
   activeWindowSamples = constrain(count, 64, FFT_SAMPLES);
@@ -42,10 +43,15 @@ bool feedSample(float sampleRateHz) {
     double mean = 0.0;
     for (int i = 0; i < activeWindowSamples; i++) mean += vReal[i];
     mean /= activeWindowSamples;
+    lastAvgMv = static_cast<float>(mean);
     for (int i = 0; i < activeWindowSamples; i++) vReal[i] -= mean;
     return true;
   }
   return false;
+}
+
+float getLastAvgMv() {
+  return lastAvgMv;
 }
 
 float computeFFT() {

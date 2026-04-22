@@ -40,7 +40,7 @@ void loop() {
           currentSampleRate = adaptSamplingRate(lastDominantFreq);
         }
         getFFTMagnitudesForDisplay(fftMagnitudes, 64);
-        publishAggregate(lastDominantFreq, lastDominantFreq, currentSampleRate, FFT_SCREEN_MS);
+        publishAggregate(getLastAvgMv(), lastDominantFreq, currentSampleRate, FFT_SCREEN_MS);
         state = FFT_INFO;
         stateStart = millis();
       }

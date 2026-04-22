@@ -12,6 +12,10 @@ static const char* _password = nullptr;
 static const char* _clientId = nullptr;
 static StatusCallback _statusCb = nullptr;
 
+static constexpr int MAX_SUBSCRIPTIONS = 8;
+static const char* _subscriptions[MAX_SUBSCRIPTIONS];
+static int _subscriptionCount = 0;
+
 static void statusMsg(const char* msg) {
   if (_statusCb) _statusCb(msg);
 }
@@ -77,6 +81,11 @@ static void connectMQTT() {
       Serial.println(" OK.");
       statusMsg("MQTT OK");
       delay(1000);
+      for (int i = 0; i < _subscriptionCount; i++) {
+        mqttClient.subscribe(_subscriptions[i]);
+        Serial.print("[MQTT] Re-subscribed to ");
+        Serial.println(_subscriptions[i]);
+      }
     } else {
       Serial.print(" failed, rc=");
       Serial.print(mqttClient.state());
@@ -119,6 +128,9 @@ void mqttCommonSetCallback(MQTT_CALLBACK_SIGNATURE) {
 }
 
 void mqttCommonSubscribe(const char* topic) {
+  if (_subscriptionCount < MAX_SUBSCRIPTIONS) {
+    _subscriptions[_subscriptionCount++] = topic;
+  }
   if (mqttClient.connected()) {
     mqttClient.subscribe(topic);
     Serial.print("[MQTT] Subscribed to ");
@@ -143,9 +155,11 @@ bool mqttCommonPublish(const char* topic, const char* payload) {
 }
 
 void mqttCommonLoop() {
-  if (mqttClient.connected()) {
-    mqttClient.loop();
+  if (!mqttClient.connected()) {
+    connectWiFi();
+    connectMQTT();
   }
+  mqttClient.loop();
 }
 
 bool mqttCommonConnected() {
