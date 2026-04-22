@@ -119,3 +119,14 @@ void getRealtimeWaveform(float* out, int count) {
     out[i] = (circBuf[idx] - minVal) / range;
   }
 }
+
+void getWaveformRange(float* minMv, float* maxMv) {
+  float minVal = circBuf[0];
+  float maxVal = circBuf[0];
+  for (int i = 1; i < CIRC_BUF_SIZE; i++) {
+    if (circBuf[i] < minVal) minVal = circBuf[i];
+    if (circBuf[i] > maxVal) maxVal = circBuf[i];
+  }
+  *minMv = minVal;
+  *maxMv = maxVal;
+}

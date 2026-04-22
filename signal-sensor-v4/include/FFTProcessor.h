@@ -6,6 +6,7 @@ float computeFFT();
 float adaptSamplingRate(float dominantFreq);
 void getFFTMagnitudesForDisplay(float* out, int count);
 void getRealtimeWaveform(float* out, int count);
+void getWaveformRange(float* minMv, float* maxMv);
 void setWindowSamples(int count);
 float getLastAvgMv();
 

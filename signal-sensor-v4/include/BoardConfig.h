@@ -11,7 +11,7 @@ constexpr int OLED_SCL = 18;
 constexpr int OLED_RESET = 21;
 constexpr uint8_t OLED_ADDR = 0x3C;
 constexpr int VEXT_PIN = 36;
-constexpr int LED_PIN = 35;
+constexpr int LED_PIN = 35;  // Active-high: HIGH = on, LOW = off
 constexpr int BUTTON_PIN = 0;
 
 constexpr adc1_channel_t ADC_CHANNEL = ADC1_CHANNEL_1;

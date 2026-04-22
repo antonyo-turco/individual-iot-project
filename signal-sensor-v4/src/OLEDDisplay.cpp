@@ -29,7 +29,7 @@ void initOLED() {
   Serial.println("[OLED] OK.");
 }
 
-void showWaveform(const float* waveform, int count) {
+void showWaveform(const float* waveform, int count, float minMv, float maxMv) {
   if (!displayReady) return;
   display.clearDisplay();
   display.setTextSize(1);
@@ -39,13 +39,30 @@ void showWaveform(const float* waveform, int count) {
 
   constexpr int graphTop = 10;
   constexpr int graphH = SCREEN_HEIGHT - graphTop;
+  constexpr int scaleW = 26;                          // pixels reserved on right for labels
+  constexpr int graphW = SCREEN_WIDTH - scaleW;
+
   for (int i = 1; i < count; i++) {
-    int x0 = (i - 1) * SCREEN_WIDTH / count;
-    int x1 = i       * SCREEN_WIDTH / count;
+    int x0 = (i - 1) * graphW / count;
+    int x1 = i       * graphW / count;
     int y0 = graphTop + graphH - static_cast<int>(waveform[i - 1] * graphH);
     int y1 = graphTop + graphH - static_cast<int>(waveform[i]     * graphH);
     display.drawLine(x0, y0, x1, y1, SSD1306_WHITE);
   }
+
+  // Vertical scale labels on the right
+  constexpr int labelX = SCREEN_WIDTH - scaleW + 1;
+  float midMv = (minMv + maxMv) / 2.0f;
+
+  display.setCursor(labelX, graphTop);
+  display.print(static_cast<int>(maxMv));
+
+  display.setCursor(labelX, graphTop + graphH / 2 - 4);
+  display.print(static_cast<int>(midMv));
+
+  display.setCursor(labelX, graphTop + graphH - 8);
+  display.print(static_cast<int>(minMv));
+
   display.display();
 }
 
