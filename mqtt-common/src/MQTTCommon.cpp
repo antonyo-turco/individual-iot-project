@@ -141,7 +141,6 @@ void mqttCommonSubscribe(const char* topic) {
 bool mqttCommonPublish(const char* topic, const char* payload) {
   connectWiFi();
   connectMQTT();
-  mqttClient.loop();
 
   if (mqttClient.publish(topic, payload)) {
     Serial.print("[MQTT] Published to ");
