@@ -12,7 +12,6 @@ static DisplayState state = WAVEFORM;
 static float currentSampleRate = SAMPLE_RATE_HZ;
 static float lastDominantFreq = 0.0f;
 static float fftMagnitudes[64];
-constexpr uint32_t FFT_SCREEN_MS = 5000;
 static uint32_t ledOffAt = 0;
 
 static bool lastButtonState = HIGH;
@@ -102,7 +101,9 @@ void taskIO(void* pvParameters) {
         memcpy(fftMagnitudes, mags, sizeof(fftMagnitudes));
         digitalWrite(LED_PIN, HIGH);
         ledOffAt = millis() + 500;
-        publishAggregate(avgMv, domFreq, sr, FFT_SCREEN_MS);
+        // window_ms = actual ADC sampling window: how long it took to collect the FFT buffer
+        uint32_t windowMs = (uint32_t)(getWindowSamples() * 1000.0f / sr);
+        publishAggregate(avgMv, domFreq, sr, windowMs);
         processLoRa(avgMv, domFreq, sr);
       }
     }

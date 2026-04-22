@@ -28,13 +28,6 @@ void loop() {
     float signal = SignalManagerComputeSignal(t);
     signal = constrain(signal, 0, 255);
     dacWrite(DAC_PIN, (uint8_t)signal);
-
-    int adcRaw = analogRead(ADC_PIN);
-    Serial.print("DAC:");
-    Serial.print((uint8_t)signal);
-    Serial.print("\t");
-    Serial.print("ADC:");
-    Serial.println(adcRaw);
   }
 
   delay(SAMPLE_INTERVAL);

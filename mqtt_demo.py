@@ -29,6 +29,7 @@ BENCHMARK_TOPIC = "iot/sensor/benchmark"
 AGGREGATE_TOPIC = "iot/sensor/aggregate"
 GENERATOR_TOPIC = "iot/generator/signal"
 GENERATOR_CMD_TOPIC = "iot/generator/command"
+LATENCY_PING_TOPIC = "iot/latency/ping"
 
 client = None
 received_messages = []
@@ -45,6 +46,7 @@ def on_connect(client, userdata, flags, rc):
         client.subscribe(BENCHMARK_TOPIC)
         client.subscribe(AGGREGATE_TOPIC)
         client.subscribe(GENERATOR_TOPIC)
+        client.subscribe(LATENCY_PING_TOPIC)
         print(f"✓ Subscribed to {BENCHMARK_TOPIC}")
         print(f"✓ Subscribed to {AGGREGATE_TOPIC}")
         print(f"✓ Subscribed to {GENERATOR_TOPIC}")
@@ -171,6 +173,7 @@ def _print_main_menu():
     print("="*60)
     print("  1. Sensor commands")
     print("  2. Generator commands")
+    print("  3. Latency benchmark")
     print("  0. Exit")
     print("  h/help: show options")
     print("  q/quit: exit")
@@ -430,6 +433,9 @@ def demo_interactive():
                 if _generator_menu():
                     break
                 _print_main_menu()
+            elif choice == "3":
+                demo_latency_benchmark()
+                _print_main_menu()
             elif choice == "0":
                 break
             else:
@@ -439,7 +445,144 @@ def demo_interactive():
             break
 
 
-def demo_automated():
+def demo_latency_benchmark():
+    """
+    Measures end-to-end pipeline latency in two phases:
+      Phase 1 — MQTT broker round-trip time (loopback ping).
+      Phase 2 — Sensor pipeline: ADC window duration, publish interval, and
+                 estimated end-to-end latency from signal sampling to Python receipt.
+    """
+    global client
+
+    print("\n" + "="*60)
+    print("  End-to-End Latency Benchmark")
+    print("="*60)
+    print("  Pipeline: Generator DAC → Sensor ADC → FFT → MQTT → Here")
+
+    # ── Phase 1: MQTT broker round-trip time (loopback) ──────────────────────
+    print("\n[Phase 1] MQTT Broker Round-Trip Time (loopback ping)")
+    print("  Publishes to a scratch topic and measures time until received back.")
+
+    N_RTT = 20
+    rtts = []
+    ping_event = threading.Event()
+    t_sent = [0.0]
+
+    def _on_ping(c, userdata, msg):
+        rtts.append((time.time() - t_sent[0]) * 1000.0)
+        ping_event.set()
+
+    client.message_callback_add(LATENCY_PING_TOPIC, _on_ping)
+    time.sleep(0.1)  # let subscription activate
+
+    for i in range(N_RTT):
+        ping_event.clear()
+        t_sent[0] = time.time()
+        client.publish(LATENCY_PING_TOPIC, f"ping-{i}")
+        if not ping_event.wait(timeout=2.0):
+            print(f"  [!] Ping {i+1} timed out")
+        else:
+            sys.stdout.write(f"\r  Sample {i+1:>2}/{N_RTT}: {rtts[-1]:.1f} ms   ")
+            sys.stdout.flush()
+        time.sleep(0.05)
+
+    client.message_callback_remove(LATENCY_PING_TOPIC)
+    print()
+
+    if not rtts:
+        print("  No RTT samples collected — aborting.")
+        return
+
+    rtts_s = sorted(rtts)
+    mqtt_rtt_ms = sum(rtts) / len(rtts)
+    print(f"\n  MQTT RTT ({len(rtts)} samples):")
+    print(f"    Min   {min(rtts):.1f} ms")
+    print(f"    Avg   {mqtt_rtt_ms:.1f} ms")
+    print(f"    Max   {max(rtts):.1f} ms")
+    print(f"    P95   {rtts_s[int(len(rtts_s) * 0.95)]:.1f} ms")
+    print(f"    One-way estimate: {mqtt_rtt_ms / 2:.1f} ms")
+
+    # ── Phase 2: Sensor pipeline latency from aggregate messages ─────────────
+    print("\n[Phase 2] Sensor Pipeline Latency (from aggregate messages)")
+    print("  Collecting sensor aggregate messages — wait for a few FFT windows...")
+
+    N_AGG = 15
+    aggregates = []
+    agg_ready = threading.Event()
+
+    def _on_aggregate(c, userdata, msg):
+        try:
+            data = json.loads(msg.payload.decode())
+            data["_rx_time"] = time.time()
+            aggregates.append(data)
+            agg_ready.set()
+        except Exception:
+            pass
+
+    client.message_callback_add(AGGREGATE_TOPIC, _on_aggregate)
+
+    deadline = time.time() + 180
+    while len(aggregates) < N_AGG and time.time() < deadline:
+        agg_ready.clear()
+        agg_ready.wait(timeout=10.0)
+        sys.stdout.write(f"\r  Collected {len(aggregates):>2}/{N_AGG}   ")
+        sys.stdout.flush()
+
+    client.message_callback_remove(AGGREGATE_TOPIC)
+    print()
+
+    if len(aggregates) < 2:
+        print("  Not enough messages collected.")
+        return
+
+    print(f"  Collected {len(aggregates)} messages.")
+
+    window_ms_list  = [a["window_ms"]      for a in aggregates if "window_ms"      in a]
+    sample_rates    = [a["sample_rate_hz"] for a in aggregates if "sample_rate_hz" in a]
+    intervals_ms    = [
+        (aggregates[i+1]["_rx_time"] - aggregates[i]["_rx_time"]) * 1000.0
+        for i in range(len(aggregates) - 1)
+    ]
+
+    avg_window   = sum(window_ms_list)  / len(window_ms_list)  if window_ms_list else 0
+    avg_interval = sum(intervals_ms)    / len(intervals_ms)
+    avg_sr       = sum(sample_rates)    / len(sample_rates)     if sample_rates   else 0
+    # Overhead = time between window filling done and next message arriving at Python
+    # ≈ FFT compute + WiFi TX + broker + Python RX ≈ avg_interval - avg_window
+    overhead_ms  = avg_interval - avg_window
+    # End-to-end = time from first sample of window to Python receipt
+    e2e_ms       = avg_window + overhead_ms  # = avg_interval (but per-sample for clarity)
+    e2e_list     = [w + (iv - w) for w, iv in zip(window_ms_list, intervals_ms)]
+
+    print(f"\n  Average sample rate:       {avg_sr:.1f} Hz")
+    print(f"\n  ADC sampling window (window_ms):")
+    print(f"    Min   {min(window_ms_list):.0f} ms")
+    print(f"    Avg   {avg_window:.0f} ms")
+    print(f"    Max   {max(window_ms_list):.0f} ms")
+    print(f"\n  Publish interval (wall-clock between consecutive aggregates):")
+    print(f"    Min   {min(intervals_ms):.0f} ms")
+    print(f"    Avg   {avg_interval:.0f} ms")
+    print(f"    Max   {max(intervals_ms):.0f} ms")
+    print(f"\n  Processing + network overhead (interval - window):")
+    print(f"    Avg   {overhead_ms:.0f} ms")
+    print(f"      of which MQTT one-way ≈ {mqtt_rtt_ms / 2:.1f} ms (from Phase 1)")
+    print(f"      FFT + WiFi TX estimate ≈ {max(0.0, overhead_ms - mqtt_rtt_ms / 2):.1f} ms")
+
+    print(f"\n  ┌─────────────────────────────────────────────────────┐")
+    print(f"  │  Estimated end-to-end latency (signal gen → Python) │")
+    print(f"  │                                                      │")
+    print(f"  │   ADC window:     {avg_window:>7.0f} ms                      │")
+    print(f"  │   FFT + WiFi TX:  {max(0.0, overhead_ms - mqtt_rtt_ms/2):>7.0f} ms                      │")
+    print(f"  │   MQTT one-way:   {mqtt_rtt_ms/2:>7.1f} ms                      │")
+    print(f"  │                  ─────────                           │")
+    print(f"  │   Total (avg):    {e2e_ms:>7.0f} ms                      │")
+    if e2e_list:
+        print(f"  │   Total (min):    {min(e2e_list):>7.0f} ms                      │")
+        print(f"  │   Total (max):    {max(e2e_list):>7.0f} ms                      │")
+    print(f"  └─────────────────────────────────────────────────────┘")
+
+
+
     """Automated demo sequence."""
     global client
     
@@ -556,16 +699,16 @@ def main():
         print("Select demo mode:")
         print("  1. Automated sequence")
         print("  2. Interactive mode")
-        
-        choice = prompt_input("\nChoice (1 or 2): ").strip()
-        
+        print("  3. Latency benchmark")
+
+        choice = prompt_input("\nChoice (1/2/3): ").strip()
+
         if choice == "1":
             demo_automated()
         elif choice == "2":
             demo_interactive()
-        else:
-            print("Invalid choice.")
-        
+        elif choice == "3":
+            demo_latency_benchmark()
         # Show collected messages
         if received_messages:
             print("\n" + "="*60)

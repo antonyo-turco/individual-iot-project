@@ -23,6 +23,10 @@ void setWindowSamples(int count) {
   Serial.printf("[FFT] Window samples set to %d\n", activeWindowSamples);
 }
 
+int getWindowSamples() {
+  return activeWindowSamples;
+}
+
 static float lastConfiguredRate = 0.0f;
 
 bool feedSample(float sampleRateHz) {
