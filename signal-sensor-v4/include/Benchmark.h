@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 
+float measureMaxSamplingRate();
 void runMaxSamplingBenchmark();
 void runSamplingDemo(float dominantFreq, float currentSampleRate);
 

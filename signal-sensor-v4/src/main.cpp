@@ -5,6 +5,7 @@
 #include <FFTProcessor.h>
 #include <MQTTClient.h>
 #include <LoRaHandler.h>
+#include <Benchmark.h>
 
 enum DisplayState { WAVEFORM, FFT_INFO, FFT_SPECTRUM };
 static DisplayState state = WAVEFORM;
@@ -23,9 +24,16 @@ static bool buttonPressed() {
   return pressed;
 }
 
-void taskFFT(void* pvParameters);
-void taskMQTT(void* pvParameters);
+// Inter-task FFT result buffer (taskFFT writes, taskIO reads)
+static SemaphoreHandle_t gFFTMutex;
+static volatile bool     gFFTReady   = false;
+static float             gAvgMv      = 0.0f;
+static float             gDomFreq    = 0.0f;
+static float             gSampleRate = SAMPLE_RATE_HZ;
+static float             gMagnitudes[64];
 
+void taskFFT(void* pvParameters);
+void taskIO(void* pvParameters);
 
 void setup() {
   Serial.begin(115200);
@@ -34,28 +42,77 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
+  gFFTMutex = xSemaphoreCreateMutex();
   initADC();
   initOLED();
+  // Measure the hardware's max ADC throughput and use it as the starting rate
+  float maxHz = measureMaxSamplingRate();
+  currentSampleRate = maxHz;
+  gSampleRate       = maxHz;
   initMQTT();
   initLoRa();
   setSampleRatePtr(&currentSampleRate);
   setDominantFreqPtr(&lastDominantFreq);
-  xTaskCreatePinnedToCore(taskFFT,      "FFT",       10000, NULL, 1, NULL, 1);
-  xTaskCreatePinnedToCore(taskMQTT,     "MQTT-WiFi", 10000, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(taskFFT, "FFT", 10000, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(taskIO,  "IO",  10000, NULL, 1, NULL, 0);
 }
 
-void taskMQTT(void* pvParameters) {
-  while (1) {
-    processMQTT();
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-  }
-}
-
+// Core 1 — ADC sampling + FFT computation only
 void taskFFT(void* pvParameters) {
   while (1) {
     bool fftReady = feedSample(currentSampleRate);
-    bool btn = buttonPressed();
+    if (fftReady) {
+      float domFreq = computeFFT(currentSampleRate);
+      float avgMv   = getLastAvgMv();
+      if (!isSampleRateOverridden()) {
+        currentSampleRate = adaptSamplingRate(domFreq, currentSampleRate);
+      }
+      if (xSemaphoreTake(gFFTMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        gDomFreq    = domFreq;
+        gAvgMv      = avgMv;
+        gSampleRate = currentSampleRate;
+        getFFTMagnitudesForDisplay(gMagnitudes, 64);
+        gFFTReady   = true;
+        xSemaphoreGive(gFFTMutex);
+      }
+    }
+  }
+}
 
+// Core 0 — MQTT, LoRa, display, button, LED
+void taskIO(void* pvParameters) {
+  while (1) {
+    //  MQTT 
+    processMQTT();
+
+    // Consume new FFT results 
+    if (xSemaphoreTake(gFFTMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+      bool newData  = gFFTReady;
+      float domFreq = gDomFreq, avgMv = gAvgMv, sr = gSampleRate;
+      float mags[64];
+      if (newData) {
+        memcpy(mags, gMagnitudes, sizeof(mags));
+        gFFTReady = false;
+      }
+      xSemaphoreGive(gFFTMutex);
+
+      if (newData) {
+        lastDominantFreq  = domFreq;
+        currentSampleRate = sr;
+        memcpy(fftMagnitudes, mags, sizeof(fftMagnitudes));
+        digitalWrite(LED_PIN, HIGH);
+        ledOffAt = millis() + 500;
+        publishAggregate(avgMv, domFreq, sr, FFT_SCREEN_MS);
+        processLoRa(avgMv, domFreq, sr);
+      }
+    }
+
+    // Button 
+    if (buttonPressed()) {
+      state = static_cast<DisplayState>((state + 1) % 3);
+    }
+
+    // Display 
     switch (state) {
       case WAVEFORM: {
         float waveform[128];
@@ -63,41 +120,23 @@ void taskFFT(void* pvParameters) {
         getRealtimeWaveform(waveform, 128);
         getWaveformRange(&wMin, &wMax);
         showWaveform(waveform, 128, wMin, wMax);
-
-        if (fftReady) {
-          digitalWrite(LED_PIN, HIGH);
-          ledOffAt = millis() + 500;
-          lastDominantFreq = computeFFT();
-          if (!isSampleRateOverridden()) {
-            currentSampleRate = adaptSamplingRate(lastDominantFreq);
-          }
-          getFFTMagnitudesForDisplay(fftMagnitudes, 64);
-          publishAggregate(getLastAvgMv(), lastDominantFreq, currentSampleRate, FFT_SCREEN_MS);
-          processLoRa(getLastAvgMv(), lastDominantFreq, currentSampleRate);
-        }
-        if (btn) {
-          state = FFT_INFO;
-        }
         break;
       }
       case FFT_INFO:
         showFFTInfo(lastDominantFreq, currentSampleRate);
-        if (btn) {
-          state = FFT_SPECTRUM;
-        }
         break;
       case FFT_SPECTRUM:
         showFFTSpectrum(lastDominantFreq, currentSampleRate, fftMagnitudes, 64);
-        if (btn) {
-          state = WAVEFORM;
-        }
         break;
     }
 
+    // LED off timer 
     if (ledOffAt > 0 && millis() >= ledOffAt) {
       digitalWrite(LED_PIN, LOW);
       ledOffAt = 0;
     }
+
+    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
 

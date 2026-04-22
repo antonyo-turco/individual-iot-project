@@ -4,6 +4,18 @@
 #include "MQTTClient.h"
 #include "OLEDDisplay.h"
 
+float measureMaxSamplingRate() {
+  constexpr int BENCH_SAMPLES = 10000;
+  uint32_t start = micros();
+  for (int i = 0; i < BENCH_SAMPLES; i++) {
+    readRawADC();
+  }
+  uint32_t elapsed = micros() - start;
+  float achievedHz = (BENCH_SAMPLES / (float)elapsed) * 1000000.0f;
+  Serial.printf("[BENCH] Max sampling rate: %.1f Hz\n", achievedHz);
+  return achievedHz;
+}
+
 void runMaxSamplingBenchmark() {
   constexpr int BENCH_SAMPLES = 10000;
   uint32_t start = micros();
