@@ -51,69 +51,13 @@ This project implements a complete IoT sensing pipeline that:
 | Signal sensor | Heltec WiFi LoRa 32 V4 | ADC1 CH1 (GPIO2), SX1262, SSD1306 OLED |
 | Edge server | Any x86/ARM host | Docker |
 
-**Sensor node pin mapping** (Heltec WiFi LoRa 32 V4):
-
-| Signal | GPIO |
-|---|---|
-| ADC input | GPIO 2 (ADC1_CH1) |
-| OLED SDA | GPIO 17 |
-| OLED SCL | GPIO 18 |
-| OLED RESET | GPIO 21 |
-| VEXT (display power) | GPIO 36 |
-| LED | GPIO 35 |
-| Button | GPIO 0 |
-| LoRa NSS | GPIO 8 |
-| LoRa DIO1 | GPIO 14 |
-| LoRa RST | GPIO 12 |
-| LoRa BUSY | GPIO 13 |
-| LoRa SPI SCK/MISO/MOSI | GPIO 9 / 11 / 10 |
+![Hardware setup](images/ina_project.jpeg)
 
 ---
 
 ## 4. System Architecture
 
-```
-┌──────────────────────────────────────────────────┐
-│             Signal Generator (ESP32)             │
-│  DAC @ 200 Hz → 0–3.3 V analogue waveform        │
-│  Waveform types: Composite, Sine, Square, …      │
-│  Default: 2·sin(2π·3t) + 4·sin(2π·5t)           │
-│  State published via MQTT (iot/generator/signal) │
-└───────────────────────┬──────────────────────────┘
-                        │ analogue wire
-                        ▼
-┌──────────────────────────────────────────────────┐
-│        Signal Sensor (Heltec WiFi LoRa 32 V4)   │
-│                                                  │
-│  [Core 1 — taskFFT]                              │
-│    ADC (12-bit, calibrated) ──► sample buffer    │
-│    Buffer full → Hann-windowed FFT               │
-│    Peak bin → dominant frequency                 │
-│    adaptSamplingRate() → new target rate         │
-│                                                  │
-│  [Core 0 — taskIO]                               │
-│    publishAggregate() → MQTT (Wi-Fi/TLS)         │
-│    processLoRa()      → LoRaWAN uplink (TTN)     │
-│    OLED + button + LED                           │
-└────────────┬──────────────────┬─────────────────┘
-             │ TLS/MQTT          │ LoRaWAN EU868
-             ▼                   ▼
-┌────────────────────┐    ┌──────────────┐
-│  Mosquitto :8883   │    │  TTN / Cloud │
-└────────┬───────────┘    └──────────────┘
-         │
-   ┌─────┴──────┐
-   │  Telegraf  │   subscribes iot/sensor/aggregate
-   └─────┬──────┘
-         │
-   ┌─────┴──────┐
-   │  InfluxDB  │   bucket: sensor-data
-   └─────┬──────┘
-         │
-   ┌─────┴──────┐
-   │  Grafana   │   :3000
-   └────────────┘
-```
+![System architecture](images/system_schema.png)
 
 The Python script (`mqtt_demo.py`) connects to the same broker and provides interactive control of both the generator and the sensor as well as a built-in latency benchmark.
 
@@ -175,6 +119,8 @@ Raw counts are converted to millivolts via `esp_adc_cal_raw_to_voltage()` before
 
 ### 6.2 FFT Implementation
 
+![FFT implementation pipeline](images/fft_implementation.png)
+
 #### Library
 
 `arduinoFFT` v2.0.2 (kosme/arduinoFFT) is used.  It is a single-header, ISR-safe Cooley–Tukey FFT implementation designed for embedded systems.  The template is instantiated with `double` precision to reduce numerical error in the magnitude spectrum.
@@ -216,8 +162,6 @@ Before the DFT, the samples are multiplied element-wise by a **Hann window**:
 $$w(n) = \frac{1}{2}\left(1 - \cos\!\left(\frac{2\pi n}{N-1}\right)\right), \quad n = 0, 1, \ldots, N-1$$
 
 This tapers the signal to zero at both ends of the buffer, eliminating the discontinuity between the last and first sample.  Without windowing, sharp edges cause **spectral leakage** — energy from a pure tone spreads across many bins, making peak detection unreliable.  The Hann window is a good default because it is easy to implement, has low side-lobe level (−31.5 dB), and does not sacrifice too much frequency resolution compared to rectangular windowing.
-
-A Blackman or Kaiser window would offer lower side-lobes but at the cost of a wider main lobe (lower frequency resolution).  Hann is the standard choice for frequency identification tasks like this one.
 
 **3. Forward DFT (`FFT.compute`)**
 
@@ -395,6 +339,12 @@ docker compose up -d
 | Grafana | `3000` | Dashboard |
 
 **Telegraf** subscribes to `iot/sensor/aggregate` and `iot/generator/signal`, parsing them as JSON.  Fields `avg`, `dominant_hz`, `sample_rate_hz`, `window_ms`, and `timestamp` are written to the `sensor_data` measurement in InfluxDB.
+
+![InfluxDB dashboard](images/influxdb_board.jpeg)
+
+![Grafana dashboard](images/grafana_board.jpeg)
+
+<video src="images/graphing_video.mp4" controls width="100%"></video>
 
 **TLS certificates** are generated once with `mosquitto/certs/generate_certs.sh` (creates a self-signed CA and a server certificate).  Both the ESP32 firmware and the Python script use `ca.crt` to verify the broker.
 
